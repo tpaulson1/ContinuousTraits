@@ -1,31 +1,47 @@
 #You can use code you wrote for the correlation exercise here.
+setwd("~/Desktop/PhyloMeth/ContinuousTraits")
 source("ContinuousFunctions")
-tree <- read.tree("____PATH_TO_TREE_OR_SOME_OTHER_WAY_OF_GETTING_A_TREE____")
-discrete.data <- read.csv(file="____PATH_TO_DATA_OR_SOME_OTHER_WAY_OF_GETTING_TRAITS____", stringsAsFactors=FALSE) #death to factors.
-continuous.data <- read.csv(file="____PATH_TO_DATA_OR_SOME_OTHER_WAY_OF_GETTING_TRAITS____", stringsAsFactors=FALSE) #death to factors.
+library(ape) #utility fns
+library(geiger) #utilty fns
+library(OUwie)
+
+tree <- read.tree("ZanneEtAlChronogram1.tre")
+
+dat<-c("Daucus_carota" , "Conyza_canadensis" , "Setaria_viridis" , "Andropogon_gerardii" , "Pueraria_montana" , "Ambrosia_trifida" , "Datura_stramonium" , "Smallanthus_uvedalia" , "Perilla_frutescens" , "Verbesina_jacksonii" , "Vernonia_gigantea" , "Lespedeza_cuneata" , "Ambrosia_artemisiifolia" , "Cichorium_intybus" , "Albizia_julibrissin" , "Cercis_canadensis" , "Sorghum_halepense" , "Sorghastrum_nutans" , "Ligustrum_sinense" , "Gleditsia_triacanthos" , "Microstegium_vimineum" , "Cyperus_strigosus" , "Mosla_chinensis" , "Symphyotrichum_pilosum" , "Erechtites_hieraciifolius" , "Lespedeza_bicolor" , "Helenium_autumnale" , "Trifolium_pratense" , "Acer_saccharum" , "Lonicera_maackii" , "Liriodendron_tulipifera" , "Ailanthus_altissima")
+
+invasive<-c(1,0,1,0,1,0,1,0,1,0,0,1,0,1,1,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1)
+woody<-c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,1,1,0,0,0,0,1,0,0,0,1,1,1,1)
+
+discrete.data<-cbind.data.frame(invasive,woody)
+row.names(discrete.data)<-dat
+
+continuous.data <- rnorm(length(dat),4,1)
+names(continuous.data)<-dat
 
 cleaned.continuous <- CleanData(tree, continuous.data)
 cleaned.discrete <- CleanData(tree, discrete.data)
-VisualizeData(tree, cleaned.continuous)
-VisualizeData(tree, cleaned.discrete)
+VisualizeData(cleaned.continuous$phy, cleaned.continuous$data)
+VisualizeData(cleaned.discrete$phy, cleaned.discrete$data)
 
 #First, start basic. What is the rate of evolution of your trait on the tree? 
 
-BM1 <- fitContinuous(tree, cleaned.continuous, model="BM")
-print(paste("The rate of evolution is", _____, "in units of", _______))
+BM1 <- fitContinuous(cleaned.continuous$phy, cleaned.continuous$data, model="BM")
+print(paste("The rate of evolution is", BM1$opt$sigsq , "in units of", _______))
 #Important: What are the rates of evolution? In what units?
-OU1 <- fitContinuous(tree, cleaned.continuous, model="OU")
-par(mfcol(c(1,2)))
-plot(tree, show.tip.label=FALSE)
-ou.tree <- rescale(tree, model="OU", ___alpha____)
+
+OU1 <- fitContinuous(cleaned.continuous$phy, cleaned.continuous$data, model="OU")
+par(mfcol=c(1,2))
+plot(cleaned.continuous$phy, show.tip.label=FALSE)
+ou.tree <- rescale(cleaned.continuous$phy, model="OU", alpha=OU1$opt$alpha)
 plot(ou.tree)
 #How are the trees different?
 
 #Compare trees
-AIC.BM1 <- ________FIGURE_OUT_HOW_TO_DO_THIS_____
-AIC.OU1 <- ________FIGURE_OUT_HOW_TO_DO_THIS_____
-delta.AIC.BM1 <- ________FIGURE_OUT_HOW_TO_DO_THIS_____
-delta.AIC.OU1 <- ________FIGURE_OUT_HOW_TO_DO_THIS_____
+AIC.BM1 <- BM1$opt$aic
+AIC.OU1 <- OU1$opt$aic
+
+delta.AIC.BM1 <- AIC.BM1-min(c(AIC.BM1,AIC.OU1))
+delta.AIC.OU1 <- AIC.OU1-min(c(AIC.BM1,AIC.OU1))
 
 
 
@@ -38,23 +54,31 @@ delta.AIC.OU1 <- ________FIGURE_OUT_HOW_TO_DO_THIS_____
 
 #First, we need to assign regimes. The way we do this is with ancestral state estimation of a discrete trait.
 #We can do this using ace() in ape, or similar functions in corHMM or diversitree. Use only one discrete char
-one.discrete.char <- _____________
-reconstruction.info <- ace(one.discrete.char, tree, type="discrete", method="ML", CI=FALSE)
-best.states <- colnames(reconstruction.info)[apply(reconstruction.info$lik.anc, 1, which.max)]
+one.discrete.char <- cleaned.discrete$data[,1]
+reconstruction.info <- ace(one.discrete.char, cleaned.discrete$phy, type="discrete", method="ML", CI=TRUE)
+best.states <- apply(reconstruction.info$lik.anc, 1, which.max)
 
 
 #NOW ADD THESE AS NODE LABELS TO YOUR TREE
 
-labeled.tree <- ________________
+labeled.tree <- cleaned.discrete$phy
+labeled.tree$node.label<-best.states
+
+tips<-rownames(cleaned.continuous$data)
+new.continuous <- data.frame(tips,cleaned.discrete$data[,1],cleaned.continuous$data)
+colnames(new.continuous) <- c("tips","regime","data")
 
 
-nodeBased.OUMV <- OUwie(tree, cleaned.continuous,model="OUMV", simmap.tree=FALSE, diagn=FALSE)
+nodeBased.OUMV <- OUwie(labeled.tree, new.continuous, model="OUMV", simmap.tree=FALSE, diagn=FALSE)
+
 print(nodeBased.OUMV)
 #What do the numbers mean?
 
 #Now run all OUwie models:
-models <- c("BM1","BMS","OU1","OUM","OUMV","OUMA","OUMVA")
-results <- lapply(models, RunSingleOUwieModel, phy=tree, data=trait)
+models <- c("BM1","BMS","OU1","OUMV","OUMA","OUMVA")
+results <- lapply(models, RunSingleOUwieModel, phy=labeled.tree, data=new.continuous)
+
+#"OUM" would not run
 
 AICc.values<-sapply(results, "[[", "AICc")
 names(AICc.values)<-models
@@ -73,25 +97,27 @@ print(best) #prints info on best model
 ?OUwie.fixed
 
 #Next, keep all parameters but alpha at their maximum likelihood estimates (better would be to fix just alpha and let the others optimize given this constraint, but this is harder to program for this class). Try a range of alpha values and plot the likelihood against this.
-alpha.values<-seq(from= _______________ , to= _______________ , length.out=50)
-stop("replace the _______________ and delete this stop")
+alpha.values<-seq(from= 0.1 , to= .99, length.out=50)
+
 
 #keep it simple (and slow) and do a for loop:
 likelihood.values <- rep(NA, length(alpha.values))
 for (iteration in sequence(length(alpha.values))) {
-	likelihood.values[iteration] <- OUwie.fixed(tree, trait, model="OUMV", alpha=rep(alpha.values[iteration],2), sigma.sq=best$solution[2,], theta=best$theta[,1])$loglik
+	likelihood.values[iteration] <- OUwie.fixed(labeled.tree, new.continuous, model="OUMV", alpha=rep(alpha.values[iteration]), sigma.sq=best$solution[2,], theta=best$theta[,1])$loglik
 }
 
-plot(x= _______________ , y= _______________, xlab="_______________", ylab="_______________", type="l", bty="n")
-stop("replace the _______________ and delete this stop")
+#Error in W %*% theta : non-conformable arguments
+
+''
+plot(x= alpha.values , y= likelihood.values, xlab="Alpha Values", ylab="Log Likelihood", type="l", bty="n")
+
 
 
 points(x=best$solution[1,1], y=best$loglik, pch=16, col="red")
 text(x=best$solution[1,1], y=best$loglik, "unconstrained best", pos=4, col="red")
 
 #a rule of thumb for confidence for likelihood is all points two log likelihood units worse than the best value. Draw a dotted line on the plot to show this
-abline(h=_______________, lty="dotted") #Two log-likelihood 
-stop("replace the _______________ and delete this stop")
+abline(h=best$loglik-2, lty="dotted") #Two log-likelihood 
 
 
 #Now, let's try looking at both theta parameters at once, keeping the other parameters at their MLEs
@@ -103,7 +129,7 @@ theta2.points<-c(best$theta[2,1], rnorm(nreps-1, best$theta[2,1], 5*best$theta[2
 likelihood.values<-rep(NA,nreps)
 
 for (iteration in sequence(nreps)) {
-	likelihood.values[iteration] <- OUwie.fixed(tree, trait, model="OUMV", alpha=best$solution[1,], sigma.sq=best$solution[2,], theta=c(theta1.points[iteration], theta2.points[iteration]))$loglik
+	likelihood.values[iteration] <- OUwie.fixed(labeled.tree, new.continuous, model="OUMV", alpha=best$solution[1,], sigma.sq=best$solution[2,], theta=c(theta1.points[iteration], theta2.points[iteration]))$loglik
 }
 #think of how long that took to do 400 iterations. Now remember how long the search took (longer).
 
@@ -111,6 +137,8 @@ likelihood.differences<-(-(likelihood.values-max(likelihood.values)))
 
 #We are interpolating here: contour wants a nice grid. But by centering our simulations on the MLE values, we made sure to sample most thoroughly there
 interpolated.points<-interp(x=theta1.points, y=theta2.points, z= likelihood.differences, linear=FALSE, extrap=TRUE, xo=seq(min(theta1.points), max(theta1.points), length = 400), yo=seq(min(theta2.points), max(theta2.points), length = 400))
+
+#Error in interp.old(x, y, z, xo = xo, yo = yo, ncp = 0, extrap = extrap,  : all data collinear
 	
 contour(interpolated.points, xlim=range(c(theta1.points, theta2.points)),ylim=range(c(theta1.points, theta2.points)), xlab="Theta 1", ylab="Theta 2", levels=c(2,5,10),add=FALSE,lwd=1, bty="n", asp=1)
 

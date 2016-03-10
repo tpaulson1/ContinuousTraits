@@ -1,17 +1,20 @@
 library(ape) #utility fns
 library(geiger) #utilty fns
-library(OUWie)
+library(OUwie)
 
 #You can use code you wrote for the correlation exercise here.
 
-
-VisualizeData <- function(phy, data) {
-	#Important here is to LOOK at your data before running it. Any weird values? Does it all make sense? What about your tree? Polytomies?
+VisualizeData <- function(phy, data) {  
+	print(phy)
+	plot(phy)
+	print(data)
+	names(data)
+	str(data)
 }
 
-CleanData <- function(phy, data) {
-	#treedata() in Geiger is probably my favorite function in R.
+CleanData <- function(phy, data) { treedata(phy,data,sort=TRUE)
 }
+
 
 RunSingleOUwieModel<-function(model, phy, data) {
 	print(paste("Now starting model",model))
